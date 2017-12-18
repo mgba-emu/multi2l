@@ -15,7 +15,7 @@ enum Sensor {
 	SENSOR_RUMBLE = 16
 };
 
-const static struct GameData {
+const static struct SensorInfo {
 	const char* const code;
 	int sensors;
 } data[] = {

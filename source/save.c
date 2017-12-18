@@ -105,7 +105,6 @@ void testFlashTimings(void) {
 }
 
 const char* flashMfgName(int id) {
-	id = detectFlashMfg();
 	const char* mfg = "Unknown";
 
 	switch (id) {
@@ -131,18 +130,49 @@ const char* flashMfgName(int id) {
 	return mfg;
 }
 
-int detectSaveType(void) {
+u32 flashSize(int id) {
+	switch (id) {
+	case 0xD4BF:
+	case 0x1CC2:
+	case 0x1B32:
+	case 0x3D1F:
+		return 0x00010000;
+	case 0x1362:
+	case 0x09C2:
+		return 0x00020000;
+	}
+	return 0;
+}
+
+int detectSaveType(struct SaveCharacteristics* saveinfo) {
 	u8 b = *SRAM_BASE;
 	*SRAM_BASE = 0x80;
 
+	if (*SRAM_BASE == 0x80) {
+		*SRAM_BASE = b;
+		if (saveinfo) {
+			saveinfo->type = SAVE_SRAM;
+			saveinfo->size = 0x00008000;
+		}
+		return SAVE_SRAM;
+	}
+
 	int tries;
-	for (tries = 0; tries < 1000; ++tries) {
-		if (*SRAM_BASE == 0x80) {
-			*SRAM_BASE = b;
-			return SAVE_SRAM;
-		} else if (detectFlashMfg() != 0xFFFF) {
+	for (tries = 0; tries < 20; ++tries) {
+		saveinfo->flashId = detectFlashMfg();
+		if (saveinfo->flashId != 0xFFFF) {
+			if (saveinfo) {
+				saveinfo->type = SAVE_FLASH;
+				saveinfo->size = flashSize(saveinfo->flashId);
+				saveinfo->flashMfg = flashMfgName(saveinfo->flashId);
+			}
 			return SAVE_FLASH;
 		}
+	}
+	if (saveinfo) {
+		// TODO: Detect EEPROM
+		saveinfo->type = SAVE_EEPROM;
+		saveinfo->size = 0;
 	}
 	return SAVE_EEPROM;
 }

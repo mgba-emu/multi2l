@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 #include "save.h"
+#include "sensor.h"
 
 #include "font.h"
 
@@ -14,7 +15,9 @@ static char textGrid[2][24 * 32];
 static bool cartInserted = false;
 static char cartCode[7] = "";
 static char cartTitle[13] = "";
-static int cartSave = SAVE_NONE;
+static struct SaveCharacteristics cartSave = {};
+static int cartSensors = 0;
+static int cartLight = 0;
 
 static void updateTextGrid(void) {
 	int i;
@@ -107,7 +110,9 @@ static void cartridgeHeartbeat(void) {
 		memcpy(cartCode, GBA_HEADER.gamecode, 6);
 		memcpy(cartTitle, GBA_HEADER.title, 12);
 
-		cartSave = detectSaveType();
+		detectSaveType(&cartSave);
+		cartSensors = setupSensors();
+		cartLight = 0;
 	}
 }
 
@@ -120,12 +125,12 @@ static void heartbeat(void) {
 		sprintf(&textGrid[0][32], "ID: %s", cartCode);
 		sprintf(&textGrid[0][64], "Title: %s", cartTitle);
 		strcpy(&textGrid[0][96], "Save type: ");
-		switch (cartSave) {
+		switch (cartSave.type) {
 		case SAVE_SRAM:
 			strcpy(&textGrid[0][107], "SRAM/FRAM");
 			break;
 		case SAVE_FLASH:
-			strcpy(&textGrid[0][107], "Flash");
+			sprintf(&textGrid[0][107], "Flash (%04X, %s)", cartSave.flashId, cartSave.flashMfg);
 			break;
 		case SAVE_EEPROM:
 			strcpy(&textGrid[0][107], "EEPROM");
@@ -134,6 +139,40 @@ static void heartbeat(void) {
 			strcpy(&textGrid[0][107], "None");
 			break;
 		}
+		sprintf(&textGrid[0][128], "Save size: %ld", cartSave.size);
+		strcpy(&textGrid[0][160], "Sensors: ");
+		if (cartSensors) {
+			strcpy(&textGrid[0][169], "Yes");
+			int tile = 196;
+			if (cartSensors & SENSOR_TILT) {
+				u16 x, y;
+				testTilt(&x, &y);
+				sprintf(&textGrid[0][tile], "Tilt: %X, %X", x, y);
+				tile += 32;
+			}
+			if (cartSensors & SENSOR_GYRO) {
+				u16 z = testGyro();
+				sprintf(&textGrid[0][tile], "Gyroscope: %X", z);
+				tile += 32;
+			}
+			if (cartSensors & SENSOR_LIGHT) {
+				int light = testLight();
+				if (light >= 0) {
+					cartLight = light;
+				}
+				sprintf(&textGrid[0][tile], "Light: %X", cartLight);
+				tile += 32;
+			}
+			if (cartSensors & SENSOR_RTC) {
+				sprintf(&textGrid[0][tile], "RTC: Present");
+				tile += 32;
+			}
+			if (cartSensors & SENSOR_RUMBLE) {
+				sprintf(&textGrid[0][tile], "Rumble: Present");
+				tile += 32;
+			}
+		}
+
 	} else {
 		strcpy(&textGrid[0][8], "Empty");
 	}

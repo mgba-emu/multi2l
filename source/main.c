@@ -1,6 +1,7 @@
 #include <nds.h>
 #include <stdio.h>
 
+#include "matrix.h"
 #include "save.h"
 #include "sensor.h"
 
@@ -117,19 +118,23 @@ static void cartridgeHeartbeat(void) {
 	cartSensors = setupSensors();
 	cartLight = 0;
 	cartSize = 0;
-	int border = 0x800000;
-	int end;
-	for (end = 0; end < 4; ++end) {
-		u16 bytes = GBAROM[border];
-		if (bytes) {
-			cartSize = border << 2;
-			break;
+	if (detectMatrix()) {
+		cartSize = 64 * 1024 * 1024;
+	} else {
+		int border = 0x800000;
+		int end;
+		for (end = 0; end < 4; ++end) {
+			u16 bytes = GBAROM[border];
+			if (bytes) {
+				cartSize = border << 2;
+				break;
+			}
+			if (GBAROM[border * 2 - 1] != 0xFFFF) {
+				cartSize = border << 2;
+				break;
+			}
+			border >>= 1;
 		}
-		if (GBAROM[border * 2 - 1] != 0xFFFF) {
-			cartSize = border << 2;
-			break;
-		}
-		border >>= 1;
 	}
 }
 

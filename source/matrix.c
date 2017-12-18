@@ -36,3 +36,30 @@ void dumpMatrix(const char* fname) {
 
 	fclose(f);
 }
+
+extern char textGrid[2][24 * 32];
+bool detectMatrix(void) {
+	if (*(vu32*) 0x08000180 & 0x1000) {
+		return false;
+	}
+
+	u32 cmd[4] = {
+		0x11, // Command
+		0x200, // ROM address
+		0x08001000, // Virtual address
+		0x1, // Size (in 0x200 byte blocks)
+	};
+	writeChange(cmd);
+	readChange();
+
+	u16 value = GBA_BUS[0x800];
+	cmd[1] = 0x400;
+
+	writeChange(cmd);
+	readChange();
+
+	if (value != GBA_BUS[0x800]) {
+		return true;
+	}
+	return false;
+}

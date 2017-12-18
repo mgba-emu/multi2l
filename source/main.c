@@ -1,6 +1,8 @@
 #include <nds.h>
 #include <stdio.h>
 
+#include "save.h"
+
 #include "font.h"
 
 static u16* textBase[2] = {
@@ -12,6 +14,7 @@ static char textGrid[2][24 * 32];
 static bool cartInserted = false;
 static char cartCode[7] = "";
 static char cartTitle[13] = "";
+static int cartSave = SAVE_NONE;
 
 static void updateTextGrid(void) {
 	int i;
@@ -98,10 +101,14 @@ static void cartridgeHeartbeat(void) {
 		cartInserted = false;
 	}
 
-	cartInserted = true;
+	if (!cartInserted) {
+		cartInserted = true;
 
-	memcpy(cartCode, GBA_HEADER.gamecode, 6);
-	memcpy(cartTitle, GBA_HEADER.title, 12);
+		memcpy(cartCode, GBA_HEADER.gamecode, 6);
+		memcpy(cartTitle, GBA_HEADER.title, 12);
+
+		cartSave = detectSaveType();
+	}
 }
 
 static void heartbeat(void) {
@@ -112,6 +119,21 @@ static void heartbeat(void) {
 		strcpy(&textGrid[0][8], "Inserted");
 		sprintf(&textGrid[0][32], "ID: %s", cartCode);
 		sprintf(&textGrid[0][64], "Title: %s", cartTitle);
+		strcpy(&textGrid[0][96], "Save type: ");
+		switch (cartSave) {
+		case SAVE_SRAM:
+			strcpy(&textGrid[0][107], "SRAM/FRAM");
+			break;
+		case SAVE_FLASH:
+			strcpy(&textGrid[0][107], "Flash");
+			break;
+		case SAVE_EEPROM:
+			strcpy(&textGrid[0][107], "EEPROM");
+			break;
+		default:
+			strcpy(&textGrid[0][107], "None");
+			break;
+		}
 	} else {
 		strcpy(&textGrid[0][8], "Empty");
 	}

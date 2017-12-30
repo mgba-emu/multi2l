@@ -24,8 +24,8 @@ static u32 cartSize = 0;
 static void updateTextGrid(void) {
 	int i;
 	for (i = 0; i < 24 * 32; ++i) {
-		textBase[0][i] = textGrid[0][i] ? textGrid[0][i] - ' ' : 0;
-		textBase[1][i] = textGrid[1][i] ? textGrid[1][i] - ' ' : 0;
+		textBase[1][i] = textGrid[0][i] ? textGrid[0][i] - ' ' : 0;
+		textBase[0][i] = textGrid[1][i] ? textGrid[1][i] - ' ' : 0;
 	}
 }
 
@@ -186,7 +186,12 @@ static void heartbeat(void) {
 				tile += 32;
 			}
 			if (cartSensors & SENSOR_RTC) {
-				sprintf(&textGrid[0][tile], "RTC: Present");
+				struct RTCValue rtc;
+				if (readRTC(&rtc)) {
+					sprintf(&textGrid[0][tile], "RTC: 20%02d-%02d-%02d @ %02d:%02d:%02d", rtc.year, rtc.month, rtc.day, rtc.hour, rtc.minute, rtc.second);
+				} else {
+					sprintf(&textGrid[0][tile], "RTC: Battery dead?");
+				}
 				tile += 32;
 			}
 			if (cartSensors & SENSOR_RUMBLE) {
@@ -203,18 +208,22 @@ static void heartbeat(void) {
 }
 
 int main(void) {
-	videoSetMode(MODE_0_2D);
+	lcdMainOnBottom();
+	videoSetMode(MODE_1_3D);
 	videoSetModeSub(MODE_0_2D);
 	vramSetPrimaryBanks(VRAM_A_MAIN_BG, VRAM_B_MAIN_SPRITE, VRAM_C_SUB_BG, VRAM_D_SUB_SPRITE);
 
 	sysSetCartOwner(BUS_OWNER_ARM9);
 
-	BG_PALETTE[0] = 0x7FFF;
-	BG_PALETTE_SUB[0] = 0x7FFF;
+	setBackdropColor(0x7FFF);
+	setBackdropColorSub(0x7FFF);
 	dmaCopyHalfWords(3, fontTiles, BG_GFX, fontTilesLen);
 	dmaCopyHalfWords(3, fontTiles, BG_GFX_SUB, fontTilesLen);
 
-	bgInit(0, BgType_Text4bpp, BgSize_T_256x256, 4, 0);
+	glInit();
+	glClearColor(0xFF, 0xFF, 0xFF, 0);
+
+	bgInit(1, BgType_Text4bpp, BgSize_T_256x256, 4, 0);
 	bgInitSub(0, BgType_Text4bpp, BgSize_T_256x256, 4, 0);
 
 	irqInit();

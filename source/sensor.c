@@ -1,4 +1,9 @@
 #include <nds.h>
+#include "sensor.h"
+
+#define NOP __asm__ __volatile__("nop; nop; nop; nop;")
+
+static const u8 RTC_DATETIME[] = { 0x65 };
 
 static vu8* const SENSOR_BASE = SRAM + 0x8000;
 static vu16* const GPIO_DATA = (vu16*) 0x080000C4;
@@ -7,13 +12,9 @@ static vu16* const GPIO_CNT = (vu16*) 0x080000C8;
 static int lightCount = 0;
 static int lightData = 0;
 
-enum Sensor {
-	SENSOR_TILT = 1,
-	SENSOR_GYRO = 2,
-	SENSOR_LIGHT = 4,
-	SENSOR_RTC = 8,
-	SENSOR_RUMBLE = 16
-};
+static u8 fromBcd(u8 bcd) {
+	return (bcd & 0xF) + (bcd >> 4) * 10;
+}
 
 const static struct SensorInfo {
 	const char* const code;
@@ -46,19 +47,69 @@ const static struct SensorInfo {
 	{ 0, 0 }
 };
 
-int detectSensors(void) {
-	int i;
-	for (i = 0; data[i].code; ++i) {
-		if (memcmp(data[i].code, GBA_HEADER.gamecode, 4) == 0) {
-			return data[i].sensors;
+static void setupGPIO(int pins) {
+	*GPIO_CNT = 1;
+	*GPIO_DIR |= pins & 0xF;
+}
+
+static void resetGPIO() {
+	*GPIO_CNT = 0;
+	*GPIO_DIR = 0;
+}
+
+static void rtcTx(const u8* in, int nin, u8* out, int nout) {
+	*GPIO_DIR = 0x5;
+	*GPIO_DATA = 0x1;
+	*GPIO_DATA = 0x5;
+	*GPIO_DIR = 0x7;
+	int i, j;
+	for (i = 0; i < nin; ++i) {
+		u8 b = in[i];
+		for (j = 0; j < 8; ++j) {
+			*GPIO_DATA = 0x4 | ((b & 0x80) >> 6);
+			*GPIO_DATA = 0x5 | ((b & 0x80) >> 6);
+			b <<= 1;
 		}
 	}
+	*GPIO_DIR = 0x5;
+	for (i = 0; i < nout; ++i) {
+		u8 b = 0;
+		for (j = 0; j < 8; ++j) {
+			*GPIO_DATA = 0x4;
+			*GPIO_DATA = 0x5;
+			NOP;
+			b >>= 1;
+			b |= (*GPIO_DATA << 6) & 0x80;
+		}
+		out[i] = b;
+	}
+}
+
+static int detectRTC(void) {
+	u16 exmem = REG_EXMEMCNT;
+	exmem &= ~0x7F;
+	exmem |= 0x17;
+	REG_EXMEMCNT = exmem;
+	*GPIO_CNT = 1;
+	u8 out[7] = {};
+	rtcTx(RTC_DATETIME, 1, out, sizeof(out));
+	if (out[0] != 0xFF && out[1]) {
+		return SENSOR_RTC;
+	}
+	resetGPIO();
 	return 0;
 }
 
-static void setupGPIO(int pins) {
-	*GPIO_CNT = 1;
-	*GPIO_DIR = pins & 0xF;
+int detectSensors(void) {
+	resetGPIO();
+	int rtc = detectRTC();
+	int i;
+	for (i = 0; data[i].code; ++i) {
+		if (memcmp(data[i].code, GBA_HEADER.gamecode, 4) == 0) {
+			return data[i].sensors | rtc;
+		}
+	}
+	return rtc;
 }
 
 static void setupGyro(void) {
@@ -125,6 +176,23 @@ int testLight(void) {
 		clearLight();
 	}
 	return value;
+}
+
+bool readRTC(struct RTCValue* rtc) {
+	u8 out[7] = {};
+	rtcTx(RTC_DATETIME, 1, out, sizeof(out));
+	if (out[0] == 0xFF || !out[1]) {
+		return false;
+	}
+	rtc->year = fromBcd(out[0]);
+	rtc->month = fromBcd(out[1]);
+	rtc->day = fromBcd(out[2]);
+	rtc->dayOfWeek = fromBcd(out[3]);
+	rtc->hour = fromBcd(out[4]);
+	rtc->minute = fromBcd(out[5]);
+	rtc->second = fromBcd(out[6]);
+
+	return true;
 }
 
 void setVRumble(int rumble) {

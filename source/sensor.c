@@ -188,7 +188,7 @@ bool readRTC(struct RTCValue* rtc) {
 	rtc->month = fromBcd(out[1]);
 	rtc->day = fromBcd(out[2]);
 	rtc->dayOfWeek = fromBcd(out[3]);
-	rtc->hour = fromBcd(out[4]);
+	rtc->hour = fromBcd(out[4] & 0x3F);
 	rtc->minute = fromBcd(out[5]);
 	rtc->second = fromBcd(out[6]);
 

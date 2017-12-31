@@ -1,6 +1,10 @@
 #include <nds.h>
+
+#include <math.h>
 #include <stdio.h>
 
+#include "fifo3d.h"
+#include "graph.h"
 #include "matrix.h"
 #include "save.h"
 #include "sensor.h"
@@ -11,7 +15,7 @@ static u16* textBase[2] = {
 	(u16*) 0x06002000,
 	(u16*) 0x06202000,
 };
-static char textGrid[2][24 * 32];
+char textGrid[2][24 * 32];
 
 static bool cartInserted = false;
 static char cartCode[7] = "";
@@ -20,6 +24,8 @@ static struct SaveCharacteristics cartSave = {};
 static int cartSensors = 0;
 static int cartLight = 0;
 static u32 cartSize = 0;
+
+static int frame = 0;
 
 static void updateTextGrid(void) {
 	int i;
@@ -140,6 +146,8 @@ static void cartridgeHeartbeat(void) {
 
 static void heartbeat(void) {
 	cartridgeHeartbeat();
+
+	int graphsUsed = 0;
 	memset(&textGrid[0][0], 0, sizeof(textGrid[0]));
 	strcpy(&textGrid[0][0], "Slot-2: ");
 	if (cartInserted) {
@@ -171,11 +179,22 @@ static void heartbeat(void) {
 				testTilt(&x, &y);
 				sprintf(&textGrid[0][tile], "Tilt: %X, %X", x, y);
 				tile += 32;
+				graphs[0].offset = 0x300;
+				graphs[0].entry = frame;
+				graphs[0].values[(frame - 1) & 0xFF] = x - 0x370;
+				graphs[1].offset = 0x700;
+				graphs[1].entry = frame;
+				graphs[1].values[(frame - 1) & 0xFF] = y - 0x370;
+				graphsUsed = 3;
 			}
 			if (cartSensors & SENSOR_GYRO) {
 				u16 z = testGyro();
 				sprintf(&textGrid[0][tile], "Gyroscope: %X", z);
 				tile += 32;
+				graphs[0].offset = 0x500;
+				graphs[0].entry = frame;
+				graphs[0].values[(frame - 1) & 0xFF] = z - 0x6C0;
+				graphsUsed = 1;
 			}
 			if (cartSensors & SENSOR_LIGHT) {
 				int light = testLight();
@@ -204,7 +223,17 @@ static void heartbeat(void) {
 	} else {
 		strcpy(&textGrid[0][8], "Empty");
 	}
+	if (!graphsUsed) {
+		graphs[0].offset = 0x500;
+		graphs[0].entry = frame;
+		graphs[0].values[(frame - 1) & 0xFF] = (sinf(frame * 0.08f) * 256);
+		graphsUsed = 1;
+	}
+	renderGraphs(graphsUsed);
+	fifo3DFlush();
+	++frame;
 	updateTextGrid();
+	GFX_FLUSH = 0;
 }
 
 int main(void) {
@@ -222,6 +251,8 @@ int main(void) {
 
 	glInit();
 	glClearColor(0xFF, 0xFF, 0xFF, 0);
+	glClearDepth(0x7FFF);
+	glViewport(0, 0, 255, 191);
 
 	bgInit(1, BgType_Text4bpp, BgSize_T_256x256, 4, 0);
 	bgInitSub(0, BgType_Text4bpp, BgSize_T_256x256, 4, 0);
@@ -229,6 +260,11 @@ int main(void) {
 	irqInit();
 	irqSet(IRQ_VBLANK, heartbeat);
 	irqEnable(IRQ_VBLANK);
+
+	graphs[0].color = 0;
+	graphs[0].entry = 0;
+	graphs[1].color = 0;
+	graphs[1].entry = 0;
 
 	while (1) {
 		swiWaitForVBlank();

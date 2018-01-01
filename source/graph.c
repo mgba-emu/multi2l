@@ -10,7 +10,7 @@ void renderGraph(const struct Graph* graph) {
 	fifo3DPost(0);
 	fifo3DPost(-0x1000);
 	fifo3DPost(-0x1000);
-	fifo3DPost(0);
+	fifo3DPost(0x100);
 	fifo3DPost(0x20000);
 	fifo3DPost(0x2AAA);
 	fifo3DPost(0x20000);
@@ -18,7 +18,8 @@ void renderGraph(const struct Graph* graph) {
 	fifo3DPost(2);
 	fifo3DPost(graph->color);
 	fifo3DPost(0x001F00C0);
-	fifo3DPost(FIFO_COMMAND_PACK(FIFO_BEGIN, FIFO_VERTEX16, FIFO_VERTEX16, FIFO_NOP));
+	fifo3DPost(FIFO_COMMAND_PACK(FIFO_TEX_FORMAT, FIFO_BEGIN, FIFO_VERTEX16, FIFO_VERTEX16));
+	fifo3DPost(0);
 	fifo3DPost(3);
 
 	u16 y = graph->values[graph->entry] + graph->offset;

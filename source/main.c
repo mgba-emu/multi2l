@@ -8,6 +8,7 @@
 #include "matrix.h"
 #include "save.h"
 #include "sensor.h"
+#include "text.h"
 
 #include "font.h"
 
@@ -179,10 +180,10 @@ static void heartbeat(void) {
 				testTilt(&x, &y);
 				sprintf(&textGrid[0][tile], "Tilt: %X, %X", x, y);
 				tile += 32;
-				graphs[0].offset = 0x300;
+				graphs[0].offset = 0x380;
 				graphs[0].entry = frame;
 				graphs[0].values[(frame - 1) & 0xFF] = x - 0x370;
-				graphs[1].offset = 0x700;
+				graphs[1].offset = 0x780;
 				graphs[1].entry = frame;
 				graphs[1].values[(frame - 1) & 0xFF] = y - 0x370;
 				graphsUsed = 3;
@@ -191,7 +192,7 @@ static void heartbeat(void) {
 				u16 z = testGyro();
 				sprintf(&textGrid[0][tile], "Gyroscope: %X", z);
 				tile += 32;
-				graphs[0].offset = 0x500;
+				graphs[0].offset = 0x580;
 				graphs[0].entry = frame;
 				graphs[0].values[(frame - 1) & 0xFF] = z - 0x6C0;
 				graphsUsed = 1;
@@ -224,12 +225,19 @@ static void heartbeat(void) {
 		strcpy(&textGrid[0][8], "Empty");
 	}
 	if (!graphsUsed) {
-		graphs[0].offset = 0x500;
+		graphs[0].offset = 0x580;
 		graphs[0].entry = frame;
-		graphs[0].values[(frame - 1) & 0xFF] = (sinf(frame * 0.08f) * 256);
+		graphs[0].values[(frame - 1) & 0xFF] = (sinf(frame * 0.063f) * 256);
 		graphsUsed = 1;
 	}
 	renderGraphs(graphsUsed);
+
+	int bounce = (frame & 0x3F) - 0x20;
+	bounce *= bounce;
+	bounce = (0x380 - bounce) >> 8;
+	render3DText("Sensor view", 84, 3 + bounce, 0);
+	render3DText("Multi2l", 2, 2, 0x421 * (30 - bounce));
+
 	fifo3DFlush();
 	++frame;
 	updateTextGrid();
@@ -240,7 +248,26 @@ int main(void) {
 	lcdMainOnBottom();
 	videoSetMode(MODE_1_3D);
 	videoSetModeSub(MODE_0_2D);
-	vramSetPrimaryBanks(VRAM_A_MAIN_BG, VRAM_B_MAIN_SPRITE, VRAM_C_SUB_BG, VRAM_D_SUB_SPRITE);
+	vramSetPrimaryBanks(VRAM_A_MAIN_BG, VRAM_B_MAIN_SPRITE, VRAM_C_SUB_BG, VRAM_D_LCD);
+	vramSetBanks_EFG(VRAM_E_MAIN_SPRITE, VRAM_F_LCD, VRAM_G_LCD);
+
+	int i;
+	for (i = 0; i < 96; ++i) {
+		((u32*) VRAM_D)[(i & ~0xF) * 8 + (i & 0xF)] = fontTiles[i * 8];
+		((u32*) VRAM_D)[(i & ~0xF) * 8 + (i & 0xF) + 0x10] = fontTiles[i * 8 + 1];
+		((u32*) VRAM_D)[(i & ~0xF) * 8 + (i & 0xF) + 0x20] = fontTiles[i * 8 + 2];
+		((u32*) VRAM_D)[(i & ~0xF) * 8 + (i & 0xF) + 0x30] = fontTiles[i * 8 + 3];
+		((u32*) VRAM_D)[(i & ~0xF) * 8 + (i & 0xF) + 0x40] = fontTiles[i * 8 + 4];
+		((u32*) VRAM_D)[(i & ~0xF) * 8 + (i & 0xF) + 0x50] = fontTiles[i * 8 + 5];
+		((u32*) VRAM_D)[(i & ~0xF) * 8 + (i & 0xF) + 0x60] = fontTiles[i * 8 + 6];
+		((u32*) VRAM_D)[(i & ~0xF) * 8 + (i & 0xF) + 0x70] = fontTiles[i * 8 + 7];
+	}
+
+	VRAM_F[0] = 0x0000;
+	VRAM_F[1] = 0x7FFF;
+
+	vramSetBankD(VRAM_D_TEXTURE_SLOT0);
+	vramSetBankF(VRAM_F_TEX_PALETTE);
 
 	sysSetCartOwner(BUS_OWNER_ARM9);
 
@@ -253,6 +280,7 @@ int main(void) {
 	glClearColor(0xFF, 0xFF, 0xFF, 0);
 	glClearDepth(0x7FFF);
 	glViewport(0, 0, 255, 191);
+	glEnable(GL_TEXTURE_2D);
 
 	bgInit(1, BgType_Text4bpp, BgSize_T_256x256, 4, 0);
 	bgInitSub(0, BgType_Text4bpp, BgSize_T_256x256, 4, 0);

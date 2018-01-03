@@ -30,6 +30,7 @@ static u32 cartSize = 0;
 
 enum View;
 static void setView(enum View view);
+static void activateRumble();
 
 int frame = 0;
 
@@ -48,6 +49,12 @@ static struct MenuEntry _backMenu[] = {
 	{ "Back", true, -2, (void (*)(void*)) setView, (void*) VIEW_MENU },
 };
 
+static struct MenuEntry _sensorMenu[] = {
+	{ "Activate rumble", false, -1, (void (*)(void*)) activateRumble, NULL },
+	{ "Edit RTC", false, -1, NULL, NULL },
+	{ "Back", true, -2, (void (*)(void*)) setView, (void*) VIEW_MENU },
+};
+
 static const char* viewName(enum View view) {
 	switch (view) {
 	case VIEW_SENSORS:
@@ -60,6 +67,10 @@ static const char* viewName(enum View view) {
 
 static void setView(enum View view) {
 	currentView = view;
+}
+
+static void activateRumble() {
+	setVRumble(1);
 }
 
 static void updateTextGrid(void) {
@@ -90,6 +101,7 @@ static void cartridgeHeartbeat(void) {
 	vu8* gbarom = (vu8*) GBA_BUS;
 	u8 b4 = gbarom[0xb4];
 	if (b4 == 0xDA) {
+		cartSensors = 0;
 		cartInserted = false;
 		return;
 	}
@@ -146,8 +158,13 @@ static void cartridgeHeartbeat(void) {
 	}
 
 	if (!GBA_BUS[0]) {
+		cartSensors = 0;
 		cartInserted = false;
 		return;
+	}
+
+	if (!cartSensors) {
+		cartSensors = setupSensors();
 	}
 
 	cartInserted = true;
@@ -156,7 +173,6 @@ static void cartridgeHeartbeat(void) {
 	memcpy(cartTitle, GBA_HEADER.title, 12);
 
 	detectSaveType(&cartSave);
-	cartSensors = setupSensors();
 	cartLight = 0;
 	cartSize = 0;
 	if (detectMatrix()) {
@@ -250,6 +266,7 @@ static void heartbeat(void) {
 			}
 			if (cartSensors & SENSOR_RUMBLE) {
 				sprintf(&textGrid[0][tile], "Rumble: Present");
+				_sensorMenu[0].enabled = true;
 				tile += 32;
 			}
 		} else {
@@ -276,6 +293,7 @@ static void heartbeat(void) {
 	if (cartInserted) {
 		scanKeys();
 		u16 keys = keysDown();
+		u16 held = keysHeld();
 		u16 repeat = keysDownRepeat();
 
 		if (repeat & KEY_DOWN) {
@@ -292,6 +310,8 @@ static void heartbeat(void) {
 
 		if (keys & KEY_A) {
 			menuActivate();
+		} else if (!(held & KEY_A)) {
+			setVRumble(0);
 		}
 		if (keys & KEY_B) {
 			menuBack();
@@ -307,6 +327,7 @@ static void heartbeat(void) {
 			render3DText(name, 128 - strlen(name) * 4, 3 + (bounce >> 2), 0);
 		}
 	} else {
+		_sensorMenu[0].enabled = false;
 		render3DText("Please insert cartridge", 69, 3 + bounce, 0);
 	}
 
@@ -358,8 +379,9 @@ int main(void) {
 	glEnable(GL_TEXTURE_2D);
 
 	int rootMenu = registerMenu(_rootMenu, 3);
+	int sensorMenu = registerMenu(_sensorMenu, 3);
 	int backMenu = registerMenu(_backMenu, 1);
-	_rootMenu[2].submenu = backMenu;
+	_rootMenu[2].submenu = sensorMenu;
 	setMenu(rootMenu);
 
 	bgInit(1, BgType_Text4bpp, BgSize_T_256x256, 4, 0);

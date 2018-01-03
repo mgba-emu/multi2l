@@ -133,6 +133,7 @@ u16 testGyro(void) {
 		*GPIO_DATA = state | 2;
 	}
 	data &= 0xFFF;
+	*GPIO_DATA = state;
 	return data;
 }
 
@@ -210,6 +211,9 @@ int setupSensors(void) {
 	}
 	if (sensors & SENSOR_LIGHT) {
 		setupLight();
+	}
+	if (sensors & SENSOR_RUMBLE) {
+		setupGPIO(0x8);
 	}
 	return sensors;
 }

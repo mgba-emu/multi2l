@@ -138,6 +138,9 @@ void cursorMove(enum CursorDirection dir) {
 void menuActivate(void) {
 	const struct Menu* menu = &_menus[_activeMenu];
 	const struct MenuEntry* entry = &menu->entries[menu->active];
+	if (!entry->enabled) {
+		return;
+	}
 	if (entry->submenu == -2) {
 		popMenu();
 	} else if (entry->submenu >= 0) {

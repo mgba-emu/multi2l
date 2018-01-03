@@ -6,9 +6,11 @@
 #include "fifo3d.h"
 #include "graph.h"
 #include "matrix.h"
+#include "menu.h"
 #include "save.h"
 #include "sensor.h"
 #include "text.h"
+#include "tween.h"
 
 #include "font.h"
 
@@ -26,7 +28,39 @@ static int cartSensors = 0;
 static int cartLight = 0;
 static u32 cartSize = 0;
 
-static int frame = 0;
+enum View;
+static void setView(enum View view);
+
+int frame = 0;
+
+static enum View {
+	VIEW_MENU,
+	VIEW_SENSORS
+} currentView = VIEW_MENU;
+
+static struct MenuEntry _rootMenu[] = {
+	{ "Dump cartridge", false, -1, NULL, NULL },
+	{ "Save tools", false, -1, NULL, NULL },
+	{ "Sensors", true, -1, (void (*)(void*)) setView, (void*) VIEW_SENSORS },
+};
+
+static struct MenuEntry _backMenu[] = {
+	{ "Back", true, -2, (void (*)(void*)) setView, (void*) VIEW_MENU },
+};
+
+static const char* viewName(enum View view) {
+	switch (view) {
+	case VIEW_SENSORS:
+		return "Sensors";
+	case VIEW_MENU:
+		break;
+	}
+	return NULL;
+}
+
+static void setView(enum View view) {
+	currentView = view;
+}
 
 static void updateTextGrid(void) {
 	int i;
@@ -230,13 +264,53 @@ static void heartbeat(void) {
 		graphs[0].values[(frame - 1) & 0xFF] = (sinf(frame * 0.063f) * 256);
 		graphsUsed = 1;
 	}
-	renderGraphs(graphsUsed);
+	if (!cartInserted || currentView == VIEW_SENSORS) {
+		renderGraphs(graphsUsed);
+	}
 
+	updateTweens(frame);
 	int bounce = (frame & 0x3F) - 0x20;
 	bounce *= bounce;
-	bounce = (0x380 - bounce) >> 8;
-	render3DText("Sensor view", 84, 3 + bounce, 0);
-	render3DText("Multi2l", 2, 2, 0x421 * (30 - bounce));
+	bounce = (0x400 - bounce) >> 6;
+
+	if (cartInserted) {
+		scanKeys();
+		u16 keys = keysDown();
+		u16 repeat = keysDownRepeat();
+
+		if (repeat & KEY_DOWN) {
+			cursorMove(CUR_DOWN);
+		} else if (repeat & KEY_UP) {
+			cursorMove(CUR_UP);
+		}
+
+		if (repeat & KEY_LEFT) {
+			cursorMove(CUR_LEFT);
+		} else if (repeat & KEY_RIGHT) {
+			cursorMove(CUR_RIGHT);
+		}
+
+		if (keys & KEY_A) {
+			menuActivate();
+		}
+		if (keys & KEY_B) {
+			menuBack();
+		}
+
+		if (repeat) {
+			updateTweens(frame);
+		}
+
+		renderMenu();
+		const char* name = viewName(currentView);
+		if (name) {
+			render3DText(name, 128 - strlen(name) * 4, 3 + (bounce >> 2), 0);
+		}
+	} else {
+		render3DText("Please insert cartridge", 69, 3 + bounce, 0);
+	}
+
+	render3DText("Multi2l", 2, 2, 0x421 * (30 - (bounce >> 2)));
 
 	fifo3DFlush();
 	++frame;
@@ -279,8 +353,14 @@ int main(void) {
 	glInit();
 	glClearColor(0xFF, 0xFF, 0xFF, 0);
 	glClearDepth(0x7FFF);
+	glClearPolyID(0x3F);
 	glViewport(0, 0, 255, 191);
 	glEnable(GL_TEXTURE_2D);
+
+	int rootMenu = registerMenu(_rootMenu, 3);
+	int backMenu = registerMenu(_backMenu, 1);
+	_rootMenu[2].submenu = backMenu;
+	setMenu(rootMenu);
 
 	bgInit(1, BgType_Text4bpp, BgSize_T_256x256, 4, 0);
 	bgInitSub(0, BgType_Text4bpp, BgSize_T_256x256, 4, 0);

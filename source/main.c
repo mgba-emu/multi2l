@@ -386,6 +386,8 @@ int main(void) {
 
 	bgInit(1, BgType_Text4bpp, BgSize_T_256x256, 4, 0);
 	bgInitSub(0, BgType_Text4bpp, BgSize_T_256x256, 4, 0);
+	bgSetScroll(4, -3, -3);
+	bgUpdate();
 
 	irqInit();
 	irqSet(IRQ_VBLANK, heartbeat);

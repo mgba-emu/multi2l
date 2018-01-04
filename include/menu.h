@@ -17,10 +17,22 @@ struct MenuEntry {
 	void* context;
 };
 
+struct EditorEntry {
+	const char* placeholder;
+	const char** choices;
+	size_t nChoices;
+	void (*fn)(size_t, void*);
+	void* context;
+};
+
 int registerMenu(const struct MenuEntry*, size_t nEntries);
+int registerEditor(const struct EditorEntry*, size_t nEntries);
 void setMenu(int menuid);
 void pushMenu(int menuid);
 void popMenu(void);
+
+void setEditorValue(int editor, int entry, size_t value);
+size_t getEditorValue(int editor, int entry);
 
 void renderMenu(void);
 void cursorMove(enum CursorDirection);

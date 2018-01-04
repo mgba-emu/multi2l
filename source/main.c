@@ -27,17 +27,48 @@ static struct SaveCharacteristics cartSave = {};
 static int cartSensors = 0;
 static int cartLight = 0;
 static u32 cartSize = 0;
+static struct RTCValue uiRtc;
+
+static int rootMenu;
+static int sensorMenu;
+static int rtcMenu;
+static int backMenu;
 
 enum View;
 static void setView(enum View view);
 static void activateRumble();
+static void editRTC(size_t, void*);
 
 int frame = 0;
 
 static enum View {
 	VIEW_MENU,
-	VIEW_SENSORS
+	VIEW_SENSORS,
+	VIEW_RTC,
+	VIEW_MAX
 } currentView = VIEW_MENU;
+
+const static char* _numbers10[] = {
+	"0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+};
+
+const static char* _numbers100[] = {
+	"00", "01", "02", "03", "04", "05", "06", "07", "08", "09",
+	"10", "11", "12", "13", "14", "15", "16", "17", "18", "19",
+	"20", "21", "22", "23", "24", "25", "26", "27", "28", "29",
+	"30", "31", "32", "33", "34", "35", "36", "37", "38", "39",
+	"40", "41", "42", "43", "44", "45", "46", "47", "48", "49",
+	"50", "51", "52", "53", "54", "55", "56", "57", "58", "59",
+	"60", "61", "62", "63", "64", "65", "66", "67", "68", "69",
+	"70", "71", "72", "73", "74", "75", "76", "77", "78", "79",
+	"80", "81", "82", "83", "84", "85", "86", "87", "88", "89",
+	"90", "91", "92", "93", "94", "95", "96", "97", "98", "99",
+};
+
+const static char* const viewNames[VIEW_MAX] = {
+	[VIEW_SENSORS] = "Sensors",
+	[VIEW_RTC] = "RTC Editor"
+};
 
 static struct MenuEntry _rootMenu[] = {
 	{ "Dump cartridge", false, -1, NULL, NULL },
@@ -46,31 +77,52 @@ static struct MenuEntry _rootMenu[] = {
 };
 
 static struct MenuEntry _backMenu[] = {
-	{ "Back", true, -2, (void (*)(void*)) setView, (void*) VIEW_MENU },
+	{ "Back", true, MENU_BACK, (void (*)(void*)) setView, (void*) VIEW_MENU },
 };
 
 static struct MenuEntry _sensorMenu[] = {
-	{ "Activate rumble", false, -1, (void (*)(void*)) activateRumble, NULL },
-	{ "Edit RTC", false, -1, NULL, NULL },
-	{ "Back", true, -2, (void (*)(void*)) setView, (void*) VIEW_MENU },
+	{ "Activate rumble", false, -1, activateRumble, NULL },
+	{ "Edit RTC", false, -1, (void (*)(void*)) setView, (void*) VIEW_RTC },
+	{ "Back", true, MENU_BACK, (void (*)(void*)) setView, (void*) VIEW_MENU },
 };
 
-static const char* viewName(enum View view) {
-	switch (view) {
-	case VIEW_SENSORS:
-		return "Sensors";
-	case VIEW_MENU:
-		break;
-	}
-	return NULL;
-}
+static struct EditorEntry _rtcMenu[] = {
+	{ "20", NULL, 0, NULL, NULL },
+	{ NULL, _numbers100, 100, editRTC, &uiRtc.year },
+	{ "-", NULL, 0, NULL, NULL },
+	{ NULL, _numbers100, 12, editRTC, &uiRtc.month },
+	{ "-", NULL, 0, NULL, NULL },
+	{ NULL, _numbers100, 31, editRTC, &uiRtc.day },
+	{ " @ ", NULL, 0, NULL, NULL },
+	{ NULL, _numbers100, 24, editRTC, &uiRtc.hour },
+	{ ":", NULL, 0, NULL, NULL },
+	{ NULL, _numbers100, 60, editRTC, &uiRtc.minute },
+	{ ":", NULL, 0, NULL, NULL },
+	{ NULL, _numbers100, 60, editRTC, &uiRtc.second },
+};
 
 static void setView(enum View view) {
 	currentView = view;
+
+	if (view == VIEW_RTC) {
+		readRTC(&uiRtc);
+		setEditorValue(rtcMenu, 1, uiRtc.year);
+		setEditorValue(rtcMenu, 3, uiRtc.month);
+		setEditorValue(rtcMenu, 5, uiRtc.day);
+		setEditorValue(rtcMenu, 7, uiRtc.hour);
+		setEditorValue(rtcMenu, 9, uiRtc.minute);
+		setEditorValue(rtcMenu, 11, uiRtc.second);
+	}
 }
 
 static void activateRumble() {
 	setVRumble(1);
+}
+
+static void editRTC(size_t choice, void* context) {
+	*(u8*) context = choice;
+
+	writeRTC(&uiRtc);
 }
 
 static void updateTextGrid(void) {
@@ -262,6 +314,7 @@ static void heartbeat(void) {
 				} else {
 					sprintf(&textGrid[0][tile], "RTC: Battery dead?");
 				}
+				_sensorMenu[1].enabled = true;
 				tile += 32;
 			}
 			if (cartSensors & SENSOR_RUMBLE) {
@@ -322,12 +375,13 @@ static void heartbeat(void) {
 		}
 
 		renderMenu();
-		const char* name = viewName(currentView);
+		const char* name = viewNames[currentView];
 		if (name) {
 			render3DText(name, 128 - strlen(name) * 4, 3 + (bounce >> 2), 0);
 		}
 	} else {
 		_sensorMenu[0].enabled = false;
+		_sensorMenu[1].enabled = false;
 		render3DText("Please insert cartridge", 69, 3 + bounce, 0);
 	}
 
@@ -378,10 +432,12 @@ int main(void) {
 	glViewport(0, 0, 255, 191);
 	glEnable(GL_TEXTURE_2D);
 
-	int rootMenu = registerMenu(_rootMenu, 3);
-	int sensorMenu = registerMenu(_sensorMenu, 3);
-	int backMenu = registerMenu(_backMenu, 1);
+	rootMenu = registerMenu(_rootMenu, 3);
+	sensorMenu = registerMenu(_sensorMenu, 3);
+	rtcMenu = registerEditor(_rtcMenu, 12);
+	backMenu = registerMenu(_backMenu, 1);
 	_rootMenu[2].submenu = sensorMenu;
+	_sensorMenu[1].submenu = rtcMenu;
 	setMenu(rootMenu);
 
 	bgInit(1, BgType_Text4bpp, BgSize_T_256x256, 4, 0);

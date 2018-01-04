@@ -141,7 +141,7 @@ void menuActivate(void) {
 	if (!entry->enabled) {
 		return;
 	}
-	if (entry->submenu == -2) {
+	if (entry->submenu == MENU_BACK) {
 		popMenu();
 	} else if (entry->submenu >= 0) {
 		pushMenu(entry->submenu);
@@ -156,7 +156,7 @@ void menuBack(void) {
 	size_t i;
 	for (i = 0; i < menu->nEntries; ++i) {
 		const struct MenuEntry* entry = &menu->entries[i];
-		if (entry->submenu == -2 && entry->fn) {
+		if (entry->submenu == MENU_BACK && entry->fn) {
 			entry->fn(entry->context);
 		}
 	}

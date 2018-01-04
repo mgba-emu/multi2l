@@ -1,5 +1,7 @@
 #include <nds.h>
 
+#define MENU_BACK -2
+
 enum CursorDirection {
 	CUR_UP,
 	CUR_DOWN,

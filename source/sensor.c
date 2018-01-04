@@ -3,7 +3,7 @@
 
 #define NOP __asm__ __volatile__("nop; nop; nop; nop;")
 
-static const u8 RTC_DATETIME[] = { 0x65 };
+static const u8 RTC_DATETIME[] = { 0xA6 };
 
 static vu8* const SENSOR_BASE = SRAM + 0x8000;
 static vu16* const GPIO_DATA = (vu16*) 0x080000C4;
@@ -14,6 +14,10 @@ static int lightData = 0;
 
 static u8 fromBcd(u8 bcd) {
 	return (bcd & 0xF) + (bcd >> 4) * 10;
+}
+
+static u8 toBcd(u8 n) {
+	return (n % 10) + ((n / 10) << 4);
 }
 
 const static struct SensorInfo {
@@ -66,9 +70,9 @@ static void rtcTx(const u8* in, int nin, u8* out, int nout) {
 	for (i = 0; i < nin; ++i) {
 		u8 b = in[i];
 		for (j = 0; j < 8; ++j) {
-			*GPIO_DATA = 0x4 | ((b & 0x80) >> 6);
-			*GPIO_DATA = 0x5 | ((b & 0x80) >> 6);
-			b <<= 1;
+			*GPIO_DATA = 0x4 | ((b & 1) << 1);
+			*GPIO_DATA = 0x5 | ((b & 1) << 1);
+			b >>= 1;
 		}
 	}
 	*GPIO_DIR = 0x5;
@@ -194,6 +198,21 @@ bool readRTC(struct RTCValue* rtc) {
 	rtc->second = fromBcd(out[6]);
 
 	return true;
+}
+
+void writeRTC(const struct RTCValue* rtc) {
+	u8 in[8] = {
+		0x26,
+		toBcd(rtc->year),
+		toBcd(rtc->month),
+		toBcd(rtc->day),
+		toBcd(rtc->dayOfWeek),
+		toBcd(rtc->hour),
+		toBcd(rtc->minute),
+		toBcd(rtc->second)
+	};
+
+	rtcTx(in, sizeof(in), NULL, 0);
 }
 
 void setVRumble(int rumble) {

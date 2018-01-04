@@ -23,5 +23,6 @@ void testTilt(u16* x, u16* y);
 u16 testGyro(void);
 int testLight(void);
 bool readRTC(struct RTCValue*);
+void writeRTC(const struct RTCValue*);
 void setVRumble(int rumble);
 int setupSensors(void);
